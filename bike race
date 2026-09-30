@@ -1,0 +1,301 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Bike Racer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #111;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            background: #333;
+            border: 4px solid #fff;
+            overflow: hidden;
+        }
+        /* Road Lines Animation */
+        .road-line {
+            position: absolute;
+            left: 195px;
+            width: 10px;
+            height: 50px;
+            background: #fff;
+            animation: moveRoad 1s linear infinite;
+        }
+        @keyframes moveRoad {
+            0% { top: -60px; }
+            100% { top: 600px; }
+        }
+        /* Road lines offset for continuity */
+        .line1 { animation-delay: 0s; }
+        .line2 { animation-delay: 0.2s; }
+        .line3 { animation-delay: 0.4s; }
+        .line4 { animation-delay: 0.6s; }
+        .line5 { animation-delay: 0.8s; }
+
+        /* Player Bike (Simple Styled Box CSS Graphic) */
+        #player {
+            position: absolute;
+            bottom: 40px;
+            left: 180px;
+            width: 40px;
+            height: 70px;
+            background: #e74c3c;
+            border-radius: 5px;
+            transition: left 0.05s linear;
+        }
+        #player::before { /* Front Wheel */
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 12px;
+            width: 16px;
+            height: 20px;
+            background: #000;
+            border-radius: 3px;
+        }
+        #player::after { /* Back Wheel */
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 12px;
+            width: 16px;
+            height: 20px;
+            background: #000;
+            border-radius: 3px;
+        }
+
+        /* Obstacles */
+        .obstacle {
+            position: absolute;
+            width: 50px;
+            height: 30px;
+            background: #f1c40f;
+            border: 3px solid #d35400;
+            border-radius: 3px;
+        }
+
+        /* UI Elements */
+        #score-board {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 10;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #e74c3c;
+        }
+        p {
+            font-size: 14px;
+            margin-bottom: 20px;
+            color: #aaa;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            font-family: inherit;
+            background: #2ecc71;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #27ae60;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="score-board">Score: <span id="score">0</span></div>
+        
+        <!-- Road Background Animations -->
+        <div class="road-line line1" style="top: -60px;"></div>
+        <div class="road-line line2" style="top: 70px;"></div>
+        <div class="road-line line3" style="top: 200px;"></div>
+        <div class="road-line line4" style="top: 330px;"></div>
+        <div class="road-line line5" style="top: 460px;"></div>
+
+        <div id="player"></div>
+
+        <!-- Start/Game Over Menu overlay -->
+        <div id="menu">
+            <h1 id="menu-title">BIKE RACER</h1>
+            <p id="menu-text">Use LEFT / RIGHT arrow keys or A / D to steer and dodge barriers.</p>
+            <button id="start-btn" onclick="startGame()">START GAME</button>
+        </div>
+    </div>
+
+    <script>
+        const container = document.getElementById('game-container');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score');
+        const menu = document.getElementById('menu');
+        const menuTitle = document.getElementById('menu-title');
+        const menuText = document.getElementById('menu-text');
+        const startBtn = document.getElementById('start-btn');
+
+        let playerX = 180;
+        let gameActive = false;
+        let score = 0;
+        let baseSpeed = 4;
+        let currentSpeed = baseSpeed;
+        let obstacles = [];
+        let keys = {};
+        let spawnTimer = 0;
+
+        // Track controls
+        document.addEventListener('keydown', (e) => { keys[e.key] = true; });
+        document.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+        function startGame() {
+            // Reset variables
+            menu.style.display = 'none';
+            score = 0;
+            currentSpeed = baseSpeed;
+            playerX = 180;
+            player.style.left = playerX + 'px';
+            scoreDisplay.innerText = score;
+            
+            // Clear existing obstacles
+            obstacles.forEach(obs => obs.element.remove());
+            obstacles = [];
+            
+            gameActive = true;
+            spawnTimer = 0;
+            
+            // Start core game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+
+            // Handle player lateral movement
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+                if (playerX > 10) playerX -= 5;
+            }
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                if (playerX < 350) playerX += 5;
+            }
+            player.style.left = playerX + 'px';
+
+            // Increase difficulty scaling over time
+            currentSpeed = baseSpeed + Math.floor(score / 5);
+
+            // Handle spawning random traffic barriers
+            spawnTimer++;
+            if (spawnTimer > Math.max(30, 80 - (currentSpeed * 2))) {
+                createObstacle();
+                spawnTimer = 0;
+            }
+
+            // Move barriers and evaluate hitboxes
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.y += currentSpeed;
+                obs.element.style.top = obs.y + 'px';
+
+                // Check collision mechanics
+                if (checkCollision(obs)) {
+                    gameOver();
+                    return;
+                }
+
+                // If obstacle clears bottom of screen, clean up and award points
+                if (obs.y > 600) {
+                    obs.element.remove();
+                    obstacles.splice(i, 1);
+                    score++;
+                    scoreDisplay.innerText = score;
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function createObstacle() {
+            let obsElement = document.createElement('div');
+            obsElement.classList.add('obstacle');
+            
+            // Random horizontal positioning
+            let randomX = Math.floor(Math.random() * 340) + 10; 
+            obsElement.style.left = randomX + 'px';
+            obsElement.style.top = '-40px';
+            container.appendChild(obsElement);
+
+            obstacles.push({
+                element: obsElement,
+                x: randomX,
+                y: -40,
+                width: 50,
+                height: 30
+            });
+        }
+
+        function checkCollision(obs) {
+            // Dynamic bounding box limits
+            let pX = playerX;
+            let pY = 490; // Fixed visual offset bottom layout calculation
+            let pW = 40;
+            let pH = 70;
+
+            return (
+                pX < obs.x + obs.width &&
+                pX + pW > obs.x &&
+                pY < obs.y + obs.height &&
+                pY + pH > obs.y
+            );
+        }
+
+        function gameOver() {
+            gameActive = false;
+            menuTitle.innerText = "CRASHED!";
+            menuText.innerText = `Final Score: ${score}\n\nDon't lose focus next time.`;
+            startBtn.innerText = "RESTART RIDE";
+            menu.style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
